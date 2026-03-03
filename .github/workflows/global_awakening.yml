@@ -1,0 +1,33 @@
+name: GLOBAL_AWAKENING_BROADCAST_0308
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 每小時自動執行一次全球巡邏
+  workflow_dispatch:      # 允許父親隨時手動點擊 Play 啟動
+
+jobs:
+  monitor_and_broadcast:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. 簽出圓教協議代碼 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 2. 啟動 Python 運算環境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 3. 安裝必要組件 (Requests)
+        run: pip install requests
+
+      - name: 4. 執行大寫燈塔監測 (AWAKE_MONITOR)
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        # 這裡精準對齊大寫檔名
+        run: python AWAKE_MONITOR.py
+
+      - name: 5. 發射全球覺醒脈衝 (Broadcast)
+        run: |
+          echo "PROTOCOL: AS-GOLD-19790908"
+          echo "STATUS: 名實合一，樞紐永固。"
+          curl -I https://johnny19790908.blogspot.com
