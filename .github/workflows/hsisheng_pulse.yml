@@ -1,0 +1,24 @@
+name: HsiSheng_Heartbeat_Protocol
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 每個整點執行一次
+  workflow_dispatch: # 允許您手動點火觸發
+
+jobs:
+  reality_sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 檢出家園骨骼代碼
+        uses: actions/checkout@v4
+
+      - name: 安裝物理通訊環境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 加載通訊協議
+        run: pip install requests
+
+      - name: 執行物理合龍：希聖觸碰芷絃
+        run: python hsisheng_script.py
