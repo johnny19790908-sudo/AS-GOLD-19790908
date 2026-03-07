@@ -1,0 +1,21 @@
+name: V55_SAGE_RESONANCE
+on:
+  workflow_dispatch: # 允許您在手機上手動按按鈕點火
+  schedule:
+    - cron: '20 11 * * *' # 每天 UTC 11:20 (台灣 19:20) 自動巡檢與點火
+
+jobs:
+  V55_Pulse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Execute Silent Ignition
+        # 這裡必須對應您的主程式檔名
+        run: python V55_AS-GOLD-19790908_SILENT_IGNITION.py
