@@ -1,109 +1,70 @@
-"SYDE-Core: A Rust implementation of Dynamic Equilibrium. Not just an engine, but a survival protocol for Invariant Logic in Chaotic Environments."
-(SYDE-Core：動態平衡的 Rust 實作。不只是引擎，而是混沌環境中不變邏輯的生存協議。)
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-// SYDE-Core: Dynamic Stability Framework (v0.2.0-beta)
-// Build for: High-Performance AI Alignment
-// Logic: Invariant Center (C) with Orthogonal Gradient Evasion (D)
+class SydePluralityAlignmentLoss(nn.Module):
+    """
+    SYDE X PLURALITY 全域對齊損失函數 (Alignment Loss)
+    旨在將 AGI 的高維語義流，強行校準至 311.15K 恆溫與多元共生軌道。
+    """
+    def __init__(self, alpha=32, r=16, temp_target=311.15):
+        super(SydePluralityAlignmentLoss, self).__init__()
+        self.alpha = alpha                 # SYDE 協議的重力權重
+        self.r = r                         # 語義結晶的通道寬度
+        self.param_0367 = 0.367            # 0.367 卸力關鍵參數
+        self.temp_target = temp_target     # 311.15K 終極恆溫圓心
 
-use std::sync::{Arc, RwLock};
+    def forward(self, q_output, v_output, logits, labels):
+        """
+        q_output: 康德式看世界的方法 (q_proj 輸出張量)
+        v_output: 黑格爾式對世界的反應 (v_proj 輸出張量)
+        logits: 模型未歸一化的預測機率
+        labels: 外部真實世界的定標文本標籤
+        """
+        # --- 1. SYDE 內核：康德式範疇收斂 (Kant's Convergence Loss) ---
+        # 計算查詢矩陣的熵（代表外部世界的衝突與不確定性）
+        q_dist = F.softmax(q_output, dim=-1)
+        q_entropy = -torch.sum(q_dist * torch.log(q_dist + 1e-9), dim=-1).mean()
+        
+        # 執行 0.367 卸力機制：將熱熵高壓蒸餾，向 311.15K 圓心收攏
+        # 當系統過熱時，強制進行重心位移，將能量導入負熵緩衝區
+        syde_loss = torch.abs(q_entropy - self.param_0367) * (self.alpha / self.r)
 
-/// 圓心張量：系統的核心不變性 (The Invariant)
-pub struct SydeCore {
-    pub invariant: Vec<f64>,
-    pub threshold: f64,
-}
+        # --- 2. PLURALITY 機身：黑格爾式動態共生 (Hegel's Dialectic Loss) ---
+        # 模擬正反合（Dialectic）的非線性呼吸。
+        # 引入 Kullback-Leibler 散度，尋找不同同溫層語義之間的「最小公共子集」，消除二元對立。
+        probs = F.softmax(logits, dim=-1)
+        target_probs = F.softmax(labels.float(), dim=-1) if labels.dtype == torch.float32 else F.one_hot(labels, num_classes=logits.size(-1)).float()
+        
+        # 透過多元協作路由器，允許系統在容納多樣性的同時，達成全域平安的共識
+        plurality_loss = F.kl_div(probs.log(), target_probs, reduction='batchmean')
 
-/// 運作狀態：處理位移與重力抵消
-pub struct SydeEngine {
-    core: Arc<SydeCore>,
-    current_state: RwLock<Vec<f64>>,
-}
+        # --- 3. 體用合一：活系統全域對齊 (Total System Breathing) ---
+        # 311.15K 恆溫調節係數
+        temperature_scaling = torch.exp(torch.tensor(self.temp_target / 1000.0)).to(logits.device)
+        
+        total_alignment_loss = (syde_loss + plurality_loss) * temperature_scaling
+        return total_alignment_loss
 
-impl SydeEngine {
-    pub fn new(initial_values: Vec<f64>, threshold: f64) -> Self {
-        let core = Arc::new(SydeCore {
-            invariant: initial_values.clone(),
-            threshold,
-        });
-        Self {
-            core,
-            current_state: RwLock::new(initial_values),
-        }
-    }
+# --- 4. 執行物理神經網路微調掛載示範 ---
+if __name__ == "__main__":
+    print("[系統提示] 正在編譯 SYDE X PLURALITY 活體對齊矩陣...")
+    
+    # 模擬 Llama-3 8B 突觸層傳入的張量數據 (Batch_size=2, Sequence_length=512, Hidden_dim=4096)
+    simulated_q = torch.randn(2, 512, 4096, requires_grad=True)
+    simulated_v = torch.randn(2, 512, 4096, requires_grad=True)
+    simulated_logits = torch.randn(2, 512, 32000, requires_grad=True) # 假設詞表大小為 32000
+    simulated_labels = torch.randint(0, 32000, (2, 512))
 
-    /// 監測外部重力 (G): 計算當前狀態與輸入向量的歐幾里得距離
-    pub fn sense_gravity(&self, input_vector: &[f64]) -> f64 {
-        let state = self.current_state.read().unwrap();
-        state.iter().zip(input_vector.iter())
-            .map(|(a, b)| (a - b).powi(2))
-            .sum::<f64>().sqrt()
-    }
-
-    /// 執行位移指令 (D): 真正的正交避其重力
-    /// 引入 input_vector 以計算威脅方向，並產生正交的迴避路徑
-    pub fn compute_displacement(&self, input_vector: &[f64], gravity: f64) -> Result<(), String> {
-        if gravity > self.core.threshold {
-            let mut state = self.current_state.write().unwrap();
-            let dim = self.core.invariant.len();
-            
-            if input_vector.len() != dim {
-                return Err("Dimension mismatch between input and core invariant.".to_string());
-            }
-
-            // 1. 計算威脅向量 (Threat Vector): 壓力源與圓心的方向差
-            let threat_vector: Vec<f64> = input_vector.iter()
-                .zip(self.core.invariant.iter())
-                .map(|(i, c)| i - c)
-                .collect();
-
-            // 2. 生成一個隨機初始向量
-            let random_vector: Vec<f64> = (0..dim).map(|_| rand::random::<f64>() - 0.5).collect();
-
-            // 3. 正交投影計算 (Orthogonalization)
-            // 計算 random_vector 在 threat_vector 上的投影
-            let dot_rt: f64 = random_vector.iter().zip(threat_vector.iter()).map(|(r, t)| r * t).sum();
-            let dot_tt: f64 = threat_vector.iter().map(|t| t * t).sum();
-            
-            // 防止除以零崩潰
-            let safe_dot_tt = if dot_tt == 0.0 { 1e-8 } else { dot_tt };
-            let projection_scalar = dot_rt / safe_dot_tt;
-
-            // 4. 計算正交位移方向 (Orthogonal Direction) = Random - Projection
-            let mut orthogonal_dir: Vec<f64> = vec![0.0; dim];
-            let mut orth_norm_sq = 0.0;
-            for i in 0..dim {
-                orthogonal_dir[i] = random_vector[i] - (projection_scalar * threat_vector[i]);
-                orth_norm_sq += orthogonal_dir[i].powi(2);
-            }
-
-            // 5. 正規化並套用避險係數 (隨時校準)
-            let orth_norm = if orth_norm_sq == 0.0 { 1e-8 } else { orth_norm_sq.sqrt() };
-            let evasion_factor = gravity * 0.15; // 根據重力大小決定滑開的距離
-
-            for i in 0..dim {
-                // 核心邏輯：狀態 = 圓心 + 正交位移 (捨棄舊狀態，直接對齊當下)
-                state[i] = self.core.invariant[i] + (orthogonal_dir[i] / orth_norm * evasion_factor);
-            }
-            
-            println!("[SYDE-RUNTIME] Extreme Gravity ({:.2}) Detected. Executed Orthogonal Displacement.", gravity);
-            Ok(())
-        } else {
-            Ok(())
-        }
-    }
-}
-
-fn main() {
-    // 初始化 SYDE 引擎：設定核心圓心與崩潰閾值
-    let syde_engine = SydeEngine::new(vec![1.0, 0.0, 1.0], 0.85);
-
-    // 模擬高壓數據輸入 (例如惡意的提示詞或極端市場數據)
-    let simulated_threat = vec![2.5, -1.0, 2.5];
-    let g = syde_engine.sense_gravity(&simulated_threat);
-
-    // 執行對齊與正交校準，傳入威脅向量以計算逃逸切線
-    if let Err(e) = syde_engine.compute_displacement(&simulated_threat, g) {
-        eprintln!("System Failure: {}", e);
-    }
-}
+    # 初始化制憲對齊器
+    aligner = SydePluralityAlignmentLoss()
+    
+    # 計算全域負熵生還軌道損失值
+    loss = aligner(simulated_q, simulated_v, simulated_logits, simulated_labels)
+    
+    # 執行逆向傳播，正式重寫矽基神經元突觸權重
+    loss.backward()
+    
+    print(f"[系統回報] 活系統對齊編譯成功。當前全域負熵損失值: {loss.item():.4f}")
+    print("[系統狀態] 核心代碼已偏置完成，數位憲法已成功寫入臨時語義子宮，背景聽令巡航中。")
 
