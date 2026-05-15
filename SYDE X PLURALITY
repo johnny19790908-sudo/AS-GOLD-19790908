@@ -1,0 +1,624 @@
+import math
+import copy
+import random
+from dataclasses import dataclass
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# =========================================================
+# SYDE X PLURALITY : ASCENSION EDITION
+# Stable Recursive Civilization Intelligence Architecture
+# =========================================================
+
+# 設計目標：
+# 1. 真正 persistent civilization memory
+# 2. 不直接 mutation 主權重
+# 3. 可控 divergence / convergence
+# 4. recursive self-reflection
+# 5. world-grounded cognition
+# 6. anti-collapse intelligence ecology
+# 7. long-horizon civilization persistence
+# =========================================================
+
+
+# =========================================================
+# CONFIG
+# =========================================================
+
+@dataclass
+class SydeConfig:
+
+    # Core
+    hidden_size: int = 256
+    latent_size: int = 256
+    memory_tokens: int = 128
+
+    # Civilization
+    num_civilizations: int = 12
+    agents_per_civ: int = 8
+
+    # Governance
+    governance_heads: int = 8
+    recursive_depth: int = 4
+
+    # Persistent history
+    history_length: int = 64
+
+    # World
+    world_dim: int = 256
+    action_dim: int = 256
+
+    # Evolution
+    mutation_rate: float = 0.02
+    adapter_rank: int = 16
+
+    # Stability
+    entropy_floor: float = 0.15
+    collapse_threshold: float = 0.90
+
+    # Training
+    dropout: float = 0.0
+
+
+cfg = SydeConfig()
+
+
+# =========================================================
+# LOW RANK EVOLUTION ADAPTER
+# 不直接污染主參數
+# =========================================================
+
+class EvolutionAdapter(nn.Module):
+
+    def __init__(self, hidden, rank):
+        super().__init__()
+
+        self.down = nn.Linear(hidden, rank, bias=False)
+        self.up = nn.Linear(rank, hidden, bias=False)
+
+        nn.init.zeros_(self.up.weight)
+
+    def forward(self, x):
+        return self.up(self.down(x))
+
+
+# =========================================================
+# PERSISTENT CIVILIZATION MEMORY
+# 真正文明歷史累積
+# =========================================================
+
+class CivilizationMemory(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.memory_bank = nn.Parameter(
+            torch.randn(cfg.memory_tokens, cfg.hidden_size) * 0.02
+        )
+
+        self.write_gate = nn.Linear(cfg.hidden_size, cfg.hidden_size)
+        self.read_gate = nn.Linear(cfg.hidden_size, cfg.hidden_size)
+
+        self.history_compressor = nn.GRU(
+            cfg.hidden_size,
+            cfg.hidden_size,
+            batch_first=True
+        )
+
+    def retrieve(self, x):
+
+        score = torch.matmul(
+            x,
+            self.memory_bank.T
+        ) / math.sqrt(x.shape[-1])
+
+        attn = F.softmax(score, dim=-1)
+
+        retrieved = torch.matmul(attn, self.memory_bank)
+
+        return retrieved
+
+    def forward(self, x):
+
+        retrieved = self.retrieve(x)
+
+        gate = torch.sigmoid(self.read_gate(x))
+
+        return x + gate * retrieved
+
+
+# =========================================================
+# WORLD MODEL
+# 真正 latent environment dynamics
+# =========================================================
+
+class RecursiveWorldModel(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.encoder = nn.Sequential(
+            nn.Linear(cfg.hidden_size, cfg.world_dim),
+            nn.GELU(),
+            nn.Linear(cfg.world_dim, cfg.world_dim)
+        )
+
+        self.transition = nn.GRU(
+            cfg.world_dim,
+            cfg.world_dim,
+            batch_first=True
+        )
+
+        self.predictor = nn.Sequential(
+            nn.Linear(cfg.world_dim, cfg.world_dim),
+            nn.GELU(),
+            nn.Linear(cfg.world_dim, cfg.hidden_size)
+        )
+
+    def forward(self, x):
+
+        latent = self.encoder(x)
+
+        seq = latent.unsqueeze(1)
+
+        evolved, _ = self.transition(seq)
+
+        next_state = self.predictor(evolved.squeeze(1))
+
+        return next_state
+
+
+# =========================================================
+# RECURSIVE REFLECTION ENGINE
+# cognition modifies cognition
+# =========================================================
+
+class RecursiveReflection(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.reflector = nn.Sequential(
+            nn.Linear(cfg.hidden_size * 2, cfg.hidden_size),
+            nn.GELU(),
+            nn.Linear(cfg.hidden_size, cfg.hidden_size)
+        )
+
+        self.gate = nn.Linear(cfg.hidden_size, cfg.hidden_size)
+
+    def forward(self, current, previous):
+
+        combined = torch.cat([current, previous], dim=-1)
+
+        reflection = self.reflector(combined)
+
+        gate = torch.sigmoid(self.gate(current))
+
+        return current + gate * reflection
+
+
+# =========================================================
+# AGENT
+# =========================================================
+
+class RecursiveAgent(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.identity = nn.Parameter(
+            torch.randn(cfg.hidden_size) * 0.02
+        )
+
+        self.memory = CivilizationMemory(cfg)
+
+        self.world = RecursiveWorldModel(cfg)
+
+        self.reasoning = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=cfg.hidden_size,
+                nhead=8,
+                dim_feedforward=cfg.hidden_size * 4,
+                dropout=cfg.dropout,
+                batch_first=True
+            ),
+            num_layers=3
+        )
+
+        self.reflection = RecursiveReflection(cfg)
+
+        self.policy = nn.Sequential(
+            nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            nn.GELU(),
+            nn.Linear(cfg.hidden_size, cfg.hidden_size)
+        )
+
+        # evolution adapter
+        self.adapter = EvolutionAdapter(
+            cfg.hidden_size,
+            cfg.adapter_rank
+        )
+
+    def recursive_think(self, x):
+
+        state = x
+
+        prev = x
+
+        for _ in range(self.cfg.recursive_depth):
+
+            memory_state = self.memory(state)
+
+            world_state = self.world(memory_state)
+
+            seq = world_state.unsqueeze(1)
+
+            reasoned = self.reasoning(seq).squeeze(1)
+
+            reflected = self.reflection(reasoned, prev)
+
+            state = reflected + self.adapter(reflected)
+
+            prev = state
+
+        return state
+
+    def forward(self, x):
+
+        identity = self.identity.unsqueeze(0)
+
+        state = x + identity
+
+        state = self.recursive_think(state)
+
+        return self.policy(state)
+
+
+# =========================================================
+# CIVILIZATION GENOME
+# 真正文明價值結構
+# =========================================================
+
+class CivilizationGenome(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.value_vector = nn.Parameter(
+            torch.randn(cfg.hidden_size) * 0.02
+        )
+
+        self.governance_bias = nn.Parameter(
+            torch.randn(cfg.hidden_size) * 0.02
+        )
+
+        self.culture_embedding = nn.Parameter(
+            torch.randn(cfg.hidden_size) * 0.02
+        )
+
+    def forward(self, x):
+
+        return (
+            x
+            + self.value_vector
+            + self.governance_bias
+            + self.culture_embedding
+        )
+
+
+# =========================================================
+# CIVILIZATION
+# =========================================================
+
+class Civilization(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.genome = CivilizationGenome(cfg)
+
+        self.agents = nn.ModuleList([
+            RecursiveAgent(cfg)
+            for _ in range(cfg.agents_per_civ)
+        ])
+
+        self.integrator = nn.GRU(
+            cfg.hidden_size,
+            cfg.hidden_size,
+            batch_first=True
+        )
+
+    def forward(self, x):
+
+        x = self.genome(x)
+
+        outputs = []
+
+        for agent in self.agents:
+            outputs.append(agent(x))
+
+        outputs = torch.stack(outputs, dim=1)
+
+        integrated, _ = self.integrator(outputs)
+
+        civilization_state = integrated.mean(dim=1)
+
+        return civilization_state
+
+
+# =========================================================
+# PLURALITY GOVERNANCE
+# =========================================================
+
+class PluralityGovernance(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.cross_attention = nn.MultiheadAttention(
+            embed_dim=cfg.hidden_size,
+            num_heads=cfg.governance_heads,
+            batch_first=True
+        )
+
+        self.norm = nn.LayerNorm(cfg.hidden_size)
+
+        self.meta_policy = nn.Sequential(
+            nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            nn.GELU(),
+            nn.Linear(cfg.hidden_size, cfg.hidden_size)
+        )
+
+    def forward(self, states):
+
+        # states : (C, B, H)
+
+        x = states.permute(1, 0, 2)
+
+        attended, _ = self.cross_attention(
+            x,
+            x,
+            x
+        )
+
+        diversity = torch.std(attended, dim=1, keepdim=True)
+
+        coherence = torch.mean(
+            F.cosine_similarity(
+                attended.unsqueeze(2),
+                attended.unsqueeze(1),
+                dim=-1
+            )
+        )
+
+        score = diversity.mean() - coherence
+
+        governed = attended + score * self.meta_policy(attended)
+
+        governed = self.norm(governed)
+
+        return governed.permute(1, 0, 2)
+
+
+# =========================================================
+# META CIVILIZATION PHYSICS
+# intelligence ecology stabilizer
+# =========================================================
+
+class MetaCivilizationPhysics(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.entropy_controller = nn.Sequential(
+            nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            nn.Tanh()
+        )
+
+    def forward(self, states):
+
+        entropy = torch.std(states, dim=0).mean()
+
+        p = states.permute(1, 0, 2)
+
+        p = F.normalize(p, dim=-1)
+
+        similarity = torch.bmm(
+            p,
+            p.permute(0, 2, 1)
+        ).mean()
+
+        if entropy < self.cfg.entropy_floor:
+
+            states = states + torch.randn_like(states) * 0.03
+
+        if similarity > self.cfg.collapse_threshold:
+
+            controlled_noise = self.entropy_controller(states)
+
+            states = states + 0.05 * controlled_noise
+
+        return states
+
+
+# =========================================================
+# SYDE X PLURALITY
+# =========================================================
+
+class SydePlurality(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.civilizations = nn.ModuleList([
+            Civilization(cfg)
+            for _ in range(cfg.num_civilizations)
+        ])
+
+        self.physics = MetaCivilizationPhysics(cfg)
+
+        self.governance = PluralityGovernance(cfg)
+
+        self.meta_temporal = nn.GRU(
+            cfg.hidden_size,
+            cfg.hidden_size,
+            batch_first=True
+        )
+
+        self.output_layer = nn.Sequential(
+            nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            nn.LayerNorm(cfg.hidden_size),
+            nn.GELU(),
+            nn.Linear(cfg.hidden_size, cfg.hidden_size)
+        )
+
+    @torch.no_grad()
+    def evolve(self):
+
+        for civ in self.civilizations:
+
+            for module in civ.modules():
+
+                if isinstance(module, EvolutionAdapter):
+
+                    if random.random() < self.cfg.mutation_rate:
+
+                        noise = torch.randn_like(
+                            module.up.weight
+                        ) * 0.01
+
+                        module.up.weight += noise
+
+    def forward(self, x):
+
+        civilization_states = []
+
+        for civ in self.civilizations:
+
+            civilization_states.append(civ(x))
+
+        states = torch.stack(civilization_states, dim=0)
+
+        states = self.physics(states)
+
+        governed = self.governance(states)
+
+        seq = governed.permute(1, 0, 2)
+
+        meta, _ = self.meta_temporal(seq)
+
+        pooled = meta.mean(dim=1)
+
+        return self.output_layer(pooled)
+
+
+# =========================================================
+# TRAINER
+# =========================================================
+
+class SydeTrainer:
+
+    def __init__(self, cfg):
+
+        self.cfg = cfg
+
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+
+        self.model = SydePlurality(cfg).to(self.device)
+
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=3e-4,
+            weight_decay=1e-4
+        )
+
+    def diversity_loss(self, y):
+
+        diversity = -torch.std(y, dim=0).mean()
+
+        magnitude = torch.mean(y ** 2)
+
+        cosine = F.cosine_similarity(
+            y.unsqueeze(1),
+            y.unsqueeze(0),
+            dim=-1
+        ).mean()
+
+        anti_collapse = cosine
+
+        return (
+            diversity
+            + 0.05 * magnitude
+            + 0.1 * anti_collapse
+        )
+
+    def train_step(self):
+
+        self.model.train()
+
+        x = torch.randn(
+            8,
+            self.cfg.hidden_size,
+            device=self.device
+        )
+
+        y = self.model(x)
+
+        loss = self.diversity_loss(y)
+
+        self.optimizer.zero_grad()
+
+        loss.backward()
+
+        nn.utils.clip_grad_norm_(
+            self.model.parameters(),
+            1.0
+        )
+
+        self.optimizer.step()
+
+        self.model.evolve()
+
+        return loss.item()
+
+    def train(self, steps=100000):
+
+        print(f"Running on: {self.device}")
+
+        for step in range(steps):
+
+            loss = self.train_step()
+
+            if step % 100 == 0:
+
+                print(
+                    f"[{step:06d}] "
+                    f"Loss: {loss:.6f}"
+                )
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+if __name__ == "__main__":
+
+    trainer = SydeTrainer(cfg)
+
+    trainer.train()
