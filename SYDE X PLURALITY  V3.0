@@ -1,0 +1,249 @@
+# =========================================================
+# SYDE X PLURALITY : ASCENSION CORE
+# Recursive Civilization Intelligence Architecture
+# =========================================================
+#
+# VERSION:
+# Ascension Core vΩ
+#
+# GOALS:
+# ---------------------------------------------------------
+# 1. Stable recursive intelligence
+# 2. Persistent civilization memory
+# 3. Multi-scale world simulation
+# 4. Trust-governed cognition
+# 5. Recursive self-reflection
+# 6. Ontology compression
+# 7. Civilization immune system
+# 8. Identity continuity
+# 9. Symbolic + latent hybrid reasoning
+# 10. Controlled divergence/convergence
+#
+# =========================================================
+
+import math
+import copy
+import random
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# =========================================================
+# CONFIG
+# =========================================================
+
+@dataclass
+class AscensionConfig:
+
+    # Core
+    hidden_size: int = 512
+    world_dim: int = 512
+    memory_dim: int = 512
+
+    # Civilizations
+    num_civilizations: int = 16
+
+    # Recursion
+    recursive_depth: int = 6
+    imagination_steps: int = 8
+
+    # Ontology
+    ontology_slots: int = 128
+    ontology_dim: int = 256
+
+    # Memory Hierarchy
+    short_memory: int = 128
+    mid_memory: int = 512
+    long_memory: int = 2048
+
+    # Stability
+    collapse_threshold: float = 10.0
+    divergence_threshold: float = 3.0
+    emergency_decay: float = 0.25
+
+    # Trust
+    trust_decay: float = 0.995
+    trust_growth: float = 0.004
+
+    # Learning
+    mutation_scale: float = 0.01
+
+    # Identity
+    identity_anchor_strength: float = 0.1
+
+# =========================================================
+# NORMALIZATION
+# =========================================================
+
+class RMSNorm(nn.Module):
+
+    def __init__(self, dim, eps=1e-8):
+        super().__init__()
+        self.scale = nn.Parameter(torch.ones(dim))
+        self.eps = eps
+
+    def forward(self, x):
+        norm = x.norm(dim=-1, keepdim=True)
+        return x / (norm + self.eps) * self.scale
+
+# =========================================================
+# TEMPORAL WORLD MEMORY
+# =========================================================
+
+class TemporalWorldMemory(nn.Module):
+
+    """
+    Multi-timescale civilization memory.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.config = config
+
+        self.short_term = nn.Parameter(
+            torch.randn(config.world_dim) * 0.02
+        )
+
+        self.mid_term = nn.Parameter(
+            torch.randn(config.world_dim) * 0.02
+        )
+
+        self.long_term = nn.Parameter(
+            torch.randn(config.world_dim) * 0.02
+        )
+
+    def update(self, new_state):
+
+        self.short_term.data = (
+            0.7 * self.short_term.data
+            + 0.3 * new_state.data
+        )
+
+        self.mid_term.data = (
+            0.9 * self.mid_term.data
+            + 0.1 * new_state.data
+        )
+
+        self.long_term.data = (
+            0.99 * self.long_term.data
+            + 0.01 * new_state.data
+        )
+
+    def get_memory(self):
+
+        return (
+            self.short_term
+            + self.mid_term
+            + self.long_term
+        ) / 3.0
+
+# =========================================================
+# ONTOLOGY COMPRESSOR
+# =========================================================
+
+class OntologyCompressor(nn.Module):
+
+    """
+    Learns reusable world abstractions.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.config = config
+
+        self.ontology = nn.Parameter(
+            torch.randn(
+                config.ontology_slots,
+                config.ontology_dim
+            ) * 0.02
+        )
+
+        self.encoder = nn.Linear(
+            config.hidden_size,
+            config.ontology_dim
+        )
+
+        self.decoder = nn.Linear(
+            config.ontology_dim,
+            config.hidden_size
+        )
+
+    def forward(self, x):
+
+        latent = self.encoder(x)
+
+        attention = torch.softmax(
+            latent @ self.ontology.T /
+            math.sqrt(self.config.ontology_dim),
+            dim=-1
+        )
+
+        compressed = attention @ self.ontology
+
+        reconstructed = self.decoder(compressed)
+
+        return reconstructed, attention
+
+# =========================================================
+# RECURSIVE SELF REFLECTION
+# =========================================================
+
+class RecursiveSelfReflection(nn.Module):
+
+    """
+    Identity consistency preservation.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.config = config
+
+        self.identity_anchor = nn.Parameter(
+            torch.randn(config.hidden_size)
+        )
+
+        self.reflector = nn.GRUCell(
+            config.hidden_size,
+            config.hidden_size
+        )
+
+    def forward(self, x):
+
+        reflected = self.reflector(x, x)
+
+        consistency = F.cosine_similarity(
+            reflected,
+            self.identity_anchor.unsqueeze(0),
+            dim=-1
+        )
+
+        stabilized = (
+            reflected
+            + self.identity_anchor
+            * self.config.identity_anchor_strength
+        )
+
+        return stabilized, consistency
+
+# =========================================================
+# IMMUNE SYSTEM
+# =========================================================
+
+class CivilizationImmuneSystem(nn.Module):
+
+    """
+    Detects corruption / recursive collapse.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.config = config
+
+        self.detector = nn.Sequential(
