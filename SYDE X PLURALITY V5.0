@@ -1,0 +1,727 @@
+import math
+import uuid
+from dataclasses import dataclass
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+# =========================================================
+# SYDE X PLURALITY
+# CIVILIZATION FIELD THEORY V5
+#
+# 核心升級：
+# 1. Branch Ecology
+# 2. Causal History
+# 3. Entropy Physics
+# 4. Recursive Identity
+# 5. Meta-Law Stabilization
+# 6. Civilization Energy Dynamics
+# =========================================================
+
+
+# =========================================================
+# CONFIG
+# =========================================================
+@dataclass
+class CFConfig:
+
+    # Core
+    dim: int = 256
+    num_civ: int = 16
+    branch_factor: int = 6
+
+    # Dynamics
+    step_size: float = 0.05
+    syde_decay: float = 0.92
+    memory_decay: float = 0.985
+
+    # Ecology
+    branch_survival_topk: int = 3
+    branch_mutation_scale: float = 0.05
+
+    # Energy Physics
+    initial_energy: float = 100.0
+    divergence_cost: float = 0.15
+    coherence_cost: float = 0.05
+    entropy_floor: float = 0.1
+
+    # Meta Stability
+    meta_lr: float = 0.005
+    meta_clip: float = 0.03
+
+    # History
+    history_size: int = 128
+
+    # Identity
+    identity_decay: float = 0.995
+
+
+# =========================================================
+# EVENT
+# =========================================================
+class CivilizationEvent:
+
+    def __init__(
+        self,
+        timestep,
+        branch_id,
+        energy,
+        divergence,
+        state_snapshot,
+    ):
+        self.id = str(uuid.uuid4())
+
+        self.timestep = timestep
+        self.branch_id = branch_id
+        self.energy = energy
+        self.divergence = divergence
+
+        self.state_snapshot = state_snapshot.detach().cpu()
+
+    def compress(self):
+
+        return {
+            "t": self.timestep,
+            "b": self.branch_id,
+            "e": float(self.energy),
+            "d": float(self.divergence),
+        }
+
+
+# =========================================================
+# HISTORY GRAPH
+# =========================================================
+class CausalHistory:
+
+    def __init__(self, cfg):
+
+        self.cfg = cfg
+        self.events = []
+
+    def add(self, event):
+
+        self.events.append(event)
+
+        if len(self.events) > self.cfg.history_size:
+            self.events.pop(0)
+
+    def summarize(self, device, dim):
+
+        if len(self.events) == 0:
+            return torch.zeros(dim, device=device)
+
+        energy = torch.tensor(
+            [e.energy for e in self.events],
+            device=device
+        )
+
+        divergence = torch.tensor(
+            [e.divergence for e in self.events],
+            device=device
+        )
+
+        stats = torch.stack([
+            energy.mean(),
+            energy.std(),
+            divergence.mean(),
+            divergence.std()
+        ])
+
+        out = torch.zeros(dim, device=device)
+
+        k = min(dim, 4)
+        out[:k] = stats[:k]
+
+        return out
+
+
+# =========================================================
+# CIVILIZATION
+# =========================================================
+class Civilization(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.state = nn.Parameter(
+            torch.randn(cfg.num_civ, cfg.dim) * 0.02
+        )
+
+        # identity 不再固定
+        self.identity = nn.Parameter(
+            torch.randn(cfg.num_civ, cfg.dim) * 0.01
+        )
+
+    def forward(self):
+        return self.state
+
+    def evolve_identity(self, history_vector):
+
+        with torch.no_grad():
+
+            h = history_vector.unsqueeze(0)
+
+            self.identity.data = (
+                self.cfg.identity_decay * self.identity.data
+                + (1 - self.cfg.identity_decay) * h
+            )
+
+
+# =========================================================
+# SYDE FIELD
+# =========================================================
+class SYDEField(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.field = nn.Parameter(
+            torch.randn(cfg.dim) * 0.02
+        )
+
+    def forward(self, x):
+
+        return x + self.field
+
+    def update(self, x):
+
+        mean = x.mean(dim=0)
+
+        self.field.data = (
+            self.cfg.syde_decay * self.field.data
+            + (1 - self.cfg.syde_decay) * mean
+        )
+
+
+# =========================================================
+# PLURALITY FIELD
+# =========================================================
+class PLURALITYField(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.proj = nn.Linear(
+            cfg.dim,
+            cfg.dim * cfg.branch_factor
+        )
+
+        self.divergence = nn.Parameter(
+            torch.tensor(1.0)
+        )
+
+    def forward(self, x):
+
+        N, D = x.shape
+        B = self.cfg.branch_factor
+
+        out = self.proj(x)
+
+        branches = out.view(N, B, D)
+
+        mutation = (
+            torch.randn_like(branches)
+            * self.cfg.branch_mutation_scale
+        )
+
+        return self.divergence * (branches + mutation)
+
+
+# =========================================================
+# TENSION FIELD
+# =========================================================
+class TensionField(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.net = nn.Sequential(
+            nn.Linear(cfg.dim, cfg.dim),
+            nn.Tanh(),
+            nn.Linear(cfg.dim, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+
+        return self.net(x)
+
+
+# =========================================================
+# MEMORY FIELD
+# =========================================================
+class MemoryField(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.memory = nn.Parameter(
+            torch.zeros(cfg.dim)
+        )
+
+    def update(self, x):
+
+        mean = x.mean(dim=0)
+
+        self.memory.data = (
+            self.cfg.memory_decay * self.memory.data
+            + (1 - self.cfg.memory_decay) * mean
+        )
+
+    def forward(self):
+
+        return self.memory
+
+
+# =========================================================
+# ENERGY FIELD
+# =========================================================
+class EnergyField(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.energy = nn.Parameter(
+            torch.tensor(cfg.initial_energy)
+        )
+
+    def update(
+        self,
+        divergence,
+        coherence,
+        entropy
+    ):
+
+        cost = (
+            divergence * self.cfg.divergence_cost
+            + coherence * self.cfg.coherence_cost
+            + entropy
+        )
+
+        self.energy.data -= cost
+
+        self.energy.data = torch.clamp(
+            self.energy.data,
+            min=0.0
+        )
+
+    def forward(self):
+
+        return self.energy
+
+
+# =========================================================
+# BRANCH ECOLOGY
+# =========================================================
+class BranchEcology(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.fitness_net = nn.Sequential(
+            nn.Linear(cfg.dim, cfg.dim),
+            nn.ReLU(),
+            nn.Linear(cfg.dim, 1)
+        )
+
+    def evaluate(self, branches):
+
+        fitness = self.fitness_net(branches)
+
+        return fitness.squeeze(-1)
+
+    def select(self, branches, fitness):
+
+        topk = self.cfg.branch_survival_topk
+
+        scores, idx = torch.topk(
+            fitness,
+            k=topk,
+            dim=1
+        )
+
+        idx_expand = idx.unsqueeze(-1).expand(
+            -1,
+            -1,
+            branches.size(-1)
+        )
+
+        selected = torch.gather(
+            branches,
+            1,
+            idx_expand
+        )
+
+        return selected, scores
+
+
+# =========================================================
+# META PHYSICS V5
+# =========================================================
+class MetaPhysics(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+
+        input_dim = (
+            cfg.dim * 7
+            + 4
+        )
+
+        self.syde_rule = nn.Sequential(
+            nn.Linear(input_dim, cfg.dim),
+            nn.Tanh(),
+            nn.Linear(cfg.dim, cfg.dim)
+        )
+
+        self.plurality_rule = nn.Sequential(
+            nn.Linear(input_dim, cfg.dim),
+            nn.Tanh(),
+            nn.Linear(cfg.dim, 1)
+        )
+
+        self.entropy_rule = nn.Sequential(
+            nn.Linear(input_dim, cfg.dim),
+            nn.Tanh(),
+            nn.Linear(cfg.dim, 1)
+        )
+
+    def forward(self, x):
+
+        syde_delta = self.syde_rule(x)
+
+        plural_delta = self.plurality_rule(x)
+
+        entropy_delta = self.entropy_rule(x)
+
+        return (
+            syde_delta,
+            plural_delta.squeeze(-1),
+            entropy_delta.squeeze(-1)
+        )
+
+
+# =========================================================
+# WORLD V5
+# =========================================================
+class CivilizationWorldV5(nn.Module):
+
+    def __init__(self, cfg):
+
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.civ = Civilization(cfg)
+
+        self.syde = SYDEField(cfg)
+
+        self.plurality = PLURALITYField(cfg)
+
+        self.tension = TensionField(cfg)
+
+        self.memory = MemoryField(cfg)
+
+        self.energy = EnergyField(cfg)
+
+        self.ecology = BranchEcology(cfg)
+
+        self.meta = MetaPhysics(cfg)
+
+        self.history = CausalHistory(cfg)
+
+        self.timestep = 0
+
+    # =====================================================
+    # BRANCH STATS
+    # =====================================================
+    def aggregate_branches(self, branches):
+
+        mean = branches.mean(dim=1)
+
+        std = branches.std(dim=1)
+
+        maxv = branches.max(dim=1).values
+
+        return (
+            torch.cat([mean, std, maxv], dim=-1),
+            mean,
+        )
+
+    # =====================================================
+    # ENTROPY
+    # =====================================================
+    def compute_entropy(self, branches):
+
+        probs = F.softmax(branches, dim=-1)
+
+        entropy = -(
+            probs * torch.log(probs + 1e-8)
+        ).mean()
+
+        return entropy
+
+    # =====================================================
+    # STEP
+    # =====================================================
+    def step(self):
+
+        self.timestep += 1
+
+        # =================================================
+        # CURRENT STATE
+        # =================================================
+        x = self.civ()
+
+        # =================================================
+        # SYDE
+        # =================================================
+        syde_x = self.syde(x)
+
+        # =================================================
+        # PLURALITY
+        # =================================================
+        branches = self.plurality(x)
+
+        branch_summary, plural_mean = (
+            self.aggregate_branches(branches)
+        )
+
+        # =================================================
+        # ECOLOGY
+        # =================================================
+        fitness = self.ecology.evaluate(branches)
+
+        selected, scores = self.ecology.select(
+            branches,
+            fitness
+        )
+
+        ecological_mean = selected.mean(dim=1)
+
+        # =================================================
+        # TENSION
+        # =================================================
+        t = self.tension(x)
+
+        # =================================================
+        # ENERGY + ENTROPY
+        # =================================================
+        entropy = self.compute_entropy(branches)
+
+        coherence = (
+            (syde_x - ecological_mean)
+            .pow(2)
+            .mean()
+        )
+
+        self.energy.update(
+            divergence=self.plurality.divergence,
+            coherence=coherence,
+            entropy=entropy
+        )
+
+        energy_scale = (
+            self.energy()
+            / self.cfg.initial_energy
+        )
+
+        # =================================================
+        # DUAL FIELD COUPLING
+        # =================================================
+        delta = (
+            t * ecological_mean
+            + (1 - t) * syde_x
+        )
+
+        delta = energy_scale * delta
+
+        # =================================================
+        # IDENTITY
+        # =================================================
+        history_vector = self.history.summarize(
+            x.device,
+            self.cfg.dim
+        )
+
+        self.civ.evolve_identity(
+            history_vector
+        )
+
+        # =================================================
+        # NEW STATE
+        # =================================================
+        new_state = (
+            x
+            + self.cfg.step_size * delta
+            + 0.03 * self.civ.identity
+        )
+
+        with torch.no_grad():
+
+            self.civ.state.copy_(new_state)
+
+        # =================================================
+        # UPDATE FIELDS
+        # =================================================
+        self.syde.update(new_state)
+
+        self.memory.update(new_state)
+
+        # =================================================
+        # HISTORY EVENT
+        # =================================================
+        event = CivilizationEvent(
+            timestep=self.timestep,
+            branch_id=0,
+            energy=float(self.energy().item()),
+            divergence=float(
+                self.plurality.divergence.item()
+            ),
+            state_snapshot=new_state.mean(dim=0)
+        )
+
+        self.history.add(event)
+
+        # =================================================
+        # META INPUT
+        # =================================================
+        history_summary = self.history.summarize(
+            x.device,
+            self.cfg.dim
+        )
+
+        meta_input = torch.cat([
+
+            x.mean(dim=0),
+
+            self.memory(),
+
+            branches.var(dim=1).mean(dim=0),
+
+            branch_summary.mean(dim=0),
+
+            history_summary,
+
+            ecological_mean.mean(dim=0),
+
+            syde_x.mean(dim=0),
+
+            torch.tensor([
+                entropy,
+                coherence,
+                self.energy(),
+                self.plurality.divergence
+            ], device=x.device)
+
+        ], dim=0)
+
+        # =================================================
+        # META UPDATE
+        # =================================================
+        (
+            syde_delta,
+            plural_delta,
+            entropy_delta
+        ) = self.meta(meta_input)
+
+        with torch.no_grad():
+
+            self.syde.field.add_(
+                self.cfg.meta_lr
+                * torch.tanh(syde_delta)
+            )
+
+            self.plurality.divergence.add_(
+                self.cfg.meta_lr
+                * plural_delta
+            )
+
+            self.plurality.divergence.clamp_(
+                0.05,
+                6.0
+            )
+
+            entropy_force = (
+                torch.sigmoid(entropy_delta)
+                .mean()
+            )
+
+            self.energy.energy.add_(
+                -entropy_force
+            )
+
+            self.energy.energy.clamp_(
+                min=self.cfg.entropy_floor
+            )
+
+        # =================================================
+        # OUTPUT
+        # =================================================
+        return {
+
+            "state": new_state,
+
+            "syde": syde_x,
+
+            "branches": branches,
+
+            "selected_branches": selected,
+
+            "fitness": fitness,
+
+            "tension": t,
+
+            "memory": self.memory().clone(),
+
+            "energy": self.energy().clone(),
+
+            "entropy": entropy.detach(),
+
+            "divergence": (
+                self.plurality.divergence.clone()
+            ),
+
+            "history_size": len(
+                self.history.events
+            ),
+
+            "history_summary": history_summary
+        }
+
+
+# =========================================================
+# TEST
+# =========================================================
+if __name__ == "__main__":
+
+    cfg = CFConfig()
+
+    world = CivilizationWorldV5(cfg)
+
+    for step in range(100):
+
+        out = world.step()
+
+        if step % 10 == 0:
+
+            print(
+                f"[{step}] "
+                f"Energy={out['energy'].item():.3f} | "
+                f"Entropy={out['entropy'].item():.3f} | "
+                f"Divergence={out['divergence'].item():.3f}"
+            )
