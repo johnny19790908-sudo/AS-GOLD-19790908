@@ -1,0 +1,243 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+# =========================================================
+# CONFIG
+# =========================================================
+class CFConfig:
+    def __init__(self):
+        self.dim = 256
+        self.num_civ = 16
+        self.branch_factor = 4
+        self.step_size = 0.1
+        self.syde_decay = 0.9
+        self.memory_decay = 0.98
+
+
+# =========================================================
+# CIVILIZATION STATE
+# =========================================================
+class Civilization(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.state = nn.Parameter(torch.randn(cfg.num_civ, cfg.dim) * 0.02)
+        self.identity = nn.Parameter(torch.randn(cfg.num_civ, cfg.dim) * 0.02)
+
+    def forward(self):
+        return self.state
+
+
+# =========================================================
+# SYDE FIELD (CONVERGENCE ATTRACTOR)
+# =========================================================
+class SYDEField(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.field = nn.Parameter(torch.randn(cfg.dim) * 0.02)
+
+    def forward(self, x):
+        return x + self.field
+
+    def update(self, x):
+        mean = x.mean(dim=0)
+        self.field.data = (
+            self.cfg.syde_decay * self.field.data +
+            (1 - self.cfg.syde_decay) * mean
+        )
+
+
+# =========================================================
+# PLURALITY FIELD (DIVERGENCE GENERATOR)
+# =========================================================
+class PLURALITYField(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+
+        self.proj = nn.Linear(cfg.dim, cfg.dim * cfg.branch_factor)
+        self.divergence = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x):
+        N, D = x.shape
+        B = self.cfg.branch_factor
+
+        out = self.proj(x)
+        branches = out.view(N, B, D)
+
+        return self.divergence * branches
+
+
+# =========================================================
+# TENSION FIELD
+# =========================================================
+class TensionField(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(cfg.dim, cfg.dim),
+            nn.Tanh(),
+            nn.Linear(cfg.dim, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.net(x)  # [N,1]
+
+
+# =========================================================
+# MEMORY FIELD (LONG-TERM WORLD STATE)
+# =========================================================
+class MemoryField(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.memory = nn.Parameter(torch.zeros(cfg.dim))
+
+    def update(self, x):
+        mean = x.mean(dim=0)
+        self.memory.data = (
+            self.cfg.memory_decay * self.memory.data +
+            (1 - self.cfg.memory_decay) * mean
+        )
+
+    def forward(self):
+        return self.memory
+
+
+# =========================================================
+# META PHYSICS (STABLE + FULL STRUCTURE AWARE)
+# =========================================================
+class MetaPhysics(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+
+        # 输入 = state + memory + variance + branch_summary + tension
+        input_dim = cfg.dim * 4 + 1
+
+        self.syde_rule = nn.Sequential(
+            nn.Linear(input_dim, cfg.dim),
+            nn.Tanh(),
+            nn.Linear(cfg.dim, cfg.dim)
+        )
+
+        self.plurality_rule = nn.Sequential(
+            nn.Linear(input_dim, cfg.dim),
+            nn.Tanh(),
+            nn.Linear(cfg.dim, 1)
+        )
+
+    def forward(self, meta_input):
+        syde_delta = self.syde_rule(meta_input)
+        plural_delta = self.plurality_rule(meta_input).squeeze(-1)
+        return syde_delta, plural_delta
+
+
+# =========================================================
+# WORLD V4 CORE SYSTEM
+# =========================================================
+class CivilizationWorldV4(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.cfg = cfg
+
+        self.civ = Civilization(cfg)
+        self.syde = SYDEField(cfg)
+        self.plurality = PLURALITYField(cfg)
+        self.tension = TensionField(cfg)
+        self.memory = MemoryField(cfg)
+        self.meta = MetaPhysics(cfg)
+
+    # =====================================================
+    # BRANCH STATISTICS
+    # =====================================================
+    def aggregate_branches(self, branches):
+        mean = branches.mean(dim=1)
+        std = branches.std(dim=1)
+        maxv = branches.max(dim=1).values
+        return torch.cat([mean, std, maxv], dim=-1), mean
+
+
+    # =====================================================
+    # STEP FUNCTION
+    # =====================================================
+    def step(self):
+
+        # -------------------------
+        # STATE
+        # -------------------------
+        x = self.civ()
+
+        # -------------------------
+        # SYDE FIELD
+        # -------------------------
+        syde_x = self.syde(x)
+
+        # -------------------------
+        # PLURALITY FIELD
+        # -------------------------
+        branches = self.plurality(x)
+        branch_summary, plural_mean = self.aggregate_branches(branches)
+
+        # -------------------------
+        # TENSION FIELD
+        # -------------------------
+        t = self.tension(x)
+
+        # -------------------------
+        # DUAL FIELD COUPLING
+        # -------------------------
+        delta = t * plural_mean + (1 - t) * syde_x
+
+        new_state = x + self.cfg.step_size * delta
+        new_state = new_state + 0.05 * self.civ.identity
+
+        # -------------------------
+        # SAFE UPDATE
+        # -------------------------
+        with torch.no_grad():
+            self.civ.state.copy_(new_state)
+
+        # -------------------------
+        # FIELD UPDATES
+        # -------------------------
+        self.syde.update(x)
+        self.memory.update(new_state)
+
+        # -------------------------
+        # META INPUT (FULL STRUCTURE AWARE)
+        # -------------------------
+        meta_input = torch.cat([
+            x.mean(dim=0),                     # [D]
+            self.memory(),                     # [D]
+            branches.var(dim=1).mean(dim=0),  # [D]
+            branch_summary.mean(dim=0),        # [3D -> compressed]
+            t.mean(dim=0)                     # [1]
+        ], dim=0)
+
+        # -------------------------
+        # META UPDATE
+        # -------------------------
+        syde_delta, plural_delta = self.meta(meta_input)
+
+        with torch.no_grad():
+            self.syde.field.add_(0.01 * torch.tanh(syde_delta))
+            self.plurality.divergence.add_(0.01 * plural_delta)
+
+            self.plurality.divergence.clamp_(0.1, 5.0)
+
+        # -------------------------
+        # OUTPUT
+        # -------------------------
+        return {
+            "state": new_state,
+            "syde": syde_x,
+            "branches": branches,
+            "branch_summary": branch_summary,
+            "tension": t,
+            "memory": self.memory(),
+            "divergence": self.plurality.divergence
+        }
