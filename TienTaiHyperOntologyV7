@@ -1,0 +1,53 @@
+import torch
+import torch.nn as nn
+
+class CFConfigV7:
+    def __init__(self):
+        self.dim = 256
+        self.num_civ = 16
+        self.external_dim = 10
+
+
+class TienTaiHyperOntologyV7(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+
+        self.transcendental_prior = nn.Parameter(
+            torch.randn(cfg.dim) * 0.02,
+            requires_grad=False
+        )
+
+        self.observable_projection = nn.Linear(
+            cfg.dim,
+            cfg.external_dim
+        )
+
+        self.shared_coupling = nn.Parameter(
+            torch.randn(cfg.dim, cfg.dim) * 0.02
+        )
+
+        self.sync_gate = nn.Parameter(
+            torch.tensor(0.5)
+        )
+
+    def forward(self, civ_states):
+
+        projected_world = self.observable_projection(
+            civ_states
+        )
+
+        coupling = torch.matmul(
+            civ_states,
+            self.shared_coupling
+        )
+
+        alpha = torch.sigmoid(self.sync_gate)
+
+        integrated = civ_states + self.transcendental_prior
+
+        latent_state = torch.tanh(
+            (1 - alpha) * integrated +
+            alpha * coupling
+        )
+
+        return projected_world, latent_state
