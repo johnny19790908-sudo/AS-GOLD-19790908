@@ -1,0 +1,98 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# =========================================================
+# SYDE × PLURALITY CONFIG
+# =========================================================
+class Config:
+    def __init__(self):
+        self.n = 8              # number of plural points
+        self.dim = 2           # 2D cognitive space (for visualization)
+        self.alpha = 0.3       # center update rate
+        self.beta = 0.2        # feedback strength
+        self.gamma = 2.0       # softmax sharpness
+        self.steps = 80
+
+
+# =========================================================
+# PLURALITY SYSTEM
+# =========================================================
+class PluralitySystem:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        
+        # random initial plurality space
+        self.X = np.random.randn(cfg.n, cfg.dim)
+        
+        # initial weights (uniform)
+        self.W = np.ones(cfg.n) / cfg.n
+        
+        # initial SYDE center
+        self.c = np.mean(self.X, axis=0)
+        
+        # trajectory storage
+        self.center_history = [self.c.copy()]
+
+    # distance function
+    def distance(self, x, c):
+        return np.linalg.norm(x - c)
+
+    # softmax weighting (attention-like)
+    def update_weights(self):
+        distances = np.array([self.distance(x, self.c) for x in self.X])
+        logits = -self.cfg.gamma * distances
+        exp_vals = np.exp(logits - np.max(logits))
+        self.W = exp_vals / np.sum(exp_vals)
+
+    # SYDE center update
+    def update_center(self):
+        weighted_sum = np.sum(self.W[:, None] * self.X, axis=0)
+        self.c = (1 - self.cfg.alpha) * self.c + self.cfg.alpha * weighted_sum
+
+    # feedback to plurality space
+    def update_plurality(self):
+        for i in range(self.cfg.n):
+            self.X[i] += self.cfg.beta * (self.c - self.X[i])
+
+    # one iteration step
+    def step(self):
+        self.update_weights()
+        self.update_center()
+        self.update_plurality()
+        self.center_history.append(self.c.copy())
+
+    # run system
+    def run(self):
+        for _ in range(self.cfg.steps):
+            self.step()
+
+        return np.array(self.center_history)
+
+
+# =========================================================
+# VISUALIZATION
+# =========================================================
+def visualize(history):
+    history = np.array(history)
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(history[:, 0], history[:, 1], marker='o', linewidth=1)
+
+    plt.title("SYDE × PLURALITY - Center Trajectory (Madhyamaka Flow)")
+    plt.xlabel("Dimension 1")
+    plt.ylabel("Dimension 2")
+    plt.grid(True)
+    plt.axis("equal")
+    plt.show()
+
+
+# =========================================================
+# RUN SIMULATION
+# =========================================================
+if __name__ == "__main__":
+    cfg = Config()
+    system = PluralitySystem(cfg)
+
+    trajectory = system.run()
+    visualize(trajectory)
