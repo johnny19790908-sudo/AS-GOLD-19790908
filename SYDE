@@ -1,0 +1,167 @@
+import numpy as np
+
+
+# ======================================================
+# SYDE SYSTEM
+# ======================================================
+
+class SYDESystem:
+    def __init__(self, n_nodes=20, dim=3, edge_prob=0.2):
+
+        self.n_nodes = n_nodes
+        self.dim = dim
+
+        # -------------------------
+        # Node states (entities)
+        # -------------------------
+        self.nodes = {
+            i: np.random.randn(dim)
+            for i in range(n_nodes)
+        }
+
+        # -------------------------
+        # Relation graph (edges)
+        # -------------------------
+        self.edges = set()
+        for i in range(n_nodes):
+            for j in range(i + 1, n_nodes):
+                if np.random.rand() < edge_prob:
+                    self.edges.add((i, j))
+
+        # -------------------------
+        # SYDE PARAMETERS (tension system)
+        # -------------------------
+        self.tension_max = 3.0
+        self.tension_min = 0.2
+        self.noise_level = 0.08
+        self.target_var = 1.5
+
+
+# ======================================================
+# DYNAMICS ENGINE
+# ======================================================
+
+    def step(self):
+
+        new_edges = set()
+
+        # -------------------------
+        # 1. RELATION DYNAMICS (YIELD SYSTEM)
+        # -------------------------
+        for (i, j) in self.edges:
+
+            dist = np.linalg.norm(self.nodes[i] - self.nodes[j])
+
+            # high tension → break
+            if dist > self.tension_max:
+                continue
+
+            # low tension → metabolic pruning
+            if dist < self.tension_min:
+                if np.random.rand() > 0.5:
+                    continue
+
+            new_edges.add((i, j))
+
+            # generativity
+            if np.random.rand() < 0.02:
+                k = np.random.randint(0, self.n_nodes)
+                if k != i and k != j:
+                    new_edges.add(tuple(sorted((i, k))))
+
+        self.edges = new_edges
+
+
+        # -------------------------
+        # 2. NODE STATE UPDATE (COGNITIVE COUPLING)
+        # -------------------------
+        new_nodes = {}
+
+        for i in self.nodes:
+
+            neighbors = []
+
+            for (a, b) in self.edges:
+                if a == i:
+                    neighbors.append(self.nodes[b])
+                elif b == i:
+                    neighbors.append(self.nodes[a])
+
+            state_i = self.nodes[i]
+
+            # alignment force
+            if neighbors:
+                neighbors = np.array(neighbors)
+                alignment = 0.1 * (
+                    np.mean(neighbors, axis=0) - state_i
+                )
+            else:
+                alignment = np.zeros(self.dim)
+
+            # external noise (environmental pressure)
+            noise = np.random.randn(self.dim) * self.noise_level
+
+            new_nodes[i] = state_i + alignment + noise
+
+        self.nodes = new_nodes
+
+
+# ======================================================
+# COHERENCE FUNCTION (SYDE CORE METRIC)
+# ======================================================
+
+    def coherence(self):
+
+        # -------------------------
+        # R: relational optimal density
+        # -------------------------
+        max_edges = self.n_nodes * (self.n_nodes - 1) / 2
+        density = len(self.edges) / max_edges if max_edges > 0 else 0
+
+        R = np.exp(-((density - 0.15) ** 2) / (2 * 0.15 ** 2))
+
+
+        # -------------------------
+        # N: node contraction (alignment)
+        # -------------------------
+        states = np.array(list(self.nodes.values()))
+        mean_state = np.mean(states, axis=0)
+
+        avg_dist = np.mean(
+            np.linalg.norm(states - mean_state, axis=1)
+        )
+
+        N = np.exp(-avg_dist / (self.tension_max + 1e-8))
+
+
+        # -------------------------
+        # A: attractor metastability
+        # -------------------------
+        var = np.var(states)
+
+        A = np.exp(-abs(var - self.target_var) / (self.target_var + 1e-8))
+
+
+        # -------------------------
+        # FINAL COHERENCE (multiplicative SYDE form)
+        # -------------------------
+        C = R * N * A
+
+        return float(C)
+
+
+# ======================================================
+# MAIN LOOP
+# ======================================================
+
+if __name__ == "__main__":
+
+    system = SYDESystem(n_nodes=25, dim=3)
+
+    for t in range(120):
+
+        system.step()
+
+        c = system.coherence()
+
+        print(f"t={t:03d} | coherence={c:.4f}")
